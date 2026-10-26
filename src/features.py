@@ -11,15 +11,9 @@ OUT_PATH = ROOT / "data" / "processed" / "features.pkl"
 
 TOP_N_SIDE_EFFECTS = 60
 TOP_N_SALTS = 60
-MIN_FORM_COUNT = 30          # rarer dosage forms are grouped into "other"
+MIN_FORM_COUNT = 30        
 N_EMBED_COMPONENTS = 20
 
-# ---------------------------------------------------------------------------
-# Therapeutic categories from the "uses" text (a medicine can match several)
-# ---------------------------------------------------------------------------
-# Each value is a regex matched with whole-word boundaries.
-# Order matters for primary_category: specific infections come BEFORE the generic
-# antibiotic rule, otherwise "fungal infection" would be labelled antibiotic.
 THERAPEUTIC_MAP = {
     "antifungal":    [r"fungal"],
     "antiviral":     [r"viral", r"hiv", r"herpes", r"hepatitis", r"influenza", r"covid"],
@@ -47,9 +41,6 @@ THERAPEUTIC_MAP = {
 THERAPEUTIC_RE = {cat: re.compile(r"\b(?:" + "|".join(p) + r")\b", re.IGNORECASE)
                   for cat, p in THERAPEUTIC_MAP.items()}
 
-# ---------------------------------------------------------------------------
-# Side-effect severity lexicon (simple keyword matching)
-# ---------------------------------------------------------------------------
 SERIOUS_TERMS = [
     "liver", "kidney", "renal", "seizure", "convulsion", "anaphyla", "bleeding",
     "arrhythmia", "irregular heart", "suicid", "stevens-johnson", "hypoglycemia",
@@ -67,9 +58,6 @@ def clean_name(s: str) -> str:
     return re.sub(r"[^0-9a-zA-Z]+", "_", s).strip("_").lower()
 
 
-# ---------------------------------------------------------------------------
-# Feature blocks
-# ---------------------------------------------------------------------------
 def numeric_features(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame(index=df.index)
     out["n_salts"] = df["n_salts"]
@@ -160,9 +148,7 @@ def embedding_features(text: pd.Series, n_components: int = N_EMBED_COMPONENTS) 
     return pd.DataFrame(reduced, index=text.index, columns=cols)
 
 
-# ---------------------------------------------------------------------------
-# Target encoding helper (called inside CV folds by train.py)
-# ---------------------------------------------------------------------------
+
 def target_encode(train_col: pd.Series, train_y: pd.Series, apply_col: pd.Series,
                   smoothing: float = 20.0) -> pd.Series:
     """
@@ -175,9 +161,6 @@ def target_encode(train_col: pd.Series, train_y: pd.Series, apply_col: pd.Series
     return apply_col.map(smooth).fillna(global_mean)
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 def build_features(df: pd.DataFrame, use_embeddings: bool = False) -> dict:
     df = df.dropna(subset=["excellent_review", "poor_review"]).reset_index(drop=True)
 
@@ -197,7 +180,6 @@ def build_features(df: pd.DataFrame, use_embeddings: bool = False) -> dict:
     X = pd.concat(blocks, axis=1)
     feature_cols = X.columns.tolist()
 
-    # Satisfaction tiers for the classification version (tertiles of net_score)
     tier = pd.qcut(df["net_score"], q=3, labels=["low", "medium", "high"], duplicates="drop")
 
     meta = pd.DataFrame({

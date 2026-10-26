@@ -3,16 +3,11 @@ from pathlib import Path
 
 import pandas as pd
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parents[1]
 RAW_PATH = ROOT / "data" / "Medicine_Details.csv"
 OUT_DIR = ROOT / "data" / "processed"
 OUT_PATH = OUT_DIR / "medicines_parsed.pkl"
 
-# The Kaggle CSV uses headers like "Medicine Name" and "Excellent Review %".
-# We map them to simple snake_case names.
 COLUMN_MAP = {
     "medicine name": "medicine_name",
     "composition": "composition",
@@ -34,15 +29,11 @@ DOSAGE_FORMS = [
     "shampoo", "soap", "patch", "suppository", "granules", "lozenge",
 ]
 
-# Modified / extended release markers that appear in brand names
 RELEASE_FLAGS = ["sr", "er", "xr", "cr", "mr", "pr", "od", "xl", "la"]
 
 USE_STARTERS = r"(?:Treatment|Prevention|Relief|Management|Control|Reduction|Improvement)"
 
 
-# ---------------------------------------------------------------------------
-# Loading
-# ---------------------------------------------------------------------------
 def load_raw(path: Path = RAW_PATH) -> pd.DataFrame:
     """Read the CSV, standardise column names, drop the image column and duplicates."""
     df = pd.read_csv(path)
@@ -64,10 +55,6 @@ def load_raw(path: Path = RAW_PATH) -> pd.DataFrame:
 
     return df
 
-
-# ---------------------------------------------------------------------------
-# Composition:  "Amoxycillin (500mg) + Clavulanic Acid (125mg)"
-# ---------------------------------------------------------------------------
 _SALT_RE = re.compile(r"^(?P<salt>.+?)\s*\((?P<strength>[^)]*)\)\s*$")
 _NUM_UNIT_RE = re.compile(r"([\d.]+)\s*(mcg|mg|g|iu|%|ml)", re.IGNORECASE)
 _TO_MG = {"mg": 1.0, "mcg": 0.001, "g": 1000.0}
@@ -121,11 +108,6 @@ def canonical_composition(salts: list[dict]) -> str:
     return " + ".join(sorted(f"{s['salt']} ({s['strength']})" for s in salts))
 
 
-# ---------------------------------------------------------------------------
-# Side effects:  "Nausea Vomiting Dry mouth Headache"
-# Each new side effect starts with a capital letter, so we split before capitals.
-# Multi-word items like "Dry mouth" stay together because "mouth" is lowercase.
-# ---------------------------------------------------------------------------
 _SPLIT_BEFORE_CAPITAL = re.compile(r"\s+(?=[A-Z])")
 
 
@@ -142,9 +124,6 @@ def split_side_effects(text: str) -> list[str]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Uses:  "Treatment of Bacterial infections Prevention of Heart attack"
-# ---------------------------------------------------------------------------
 _SPLIT_USES = re.compile(rf"\s+(?={USE_STARTERS}\b)")
 
 
@@ -154,12 +133,9 @@ def split_uses(text: str) -> list[str]:
     return [u.strip(" ,.;").lower() for u in _SPLIT_USES.split(text) if u.strip()]
 
 
-# ---------------------------------------------------------------------------
-# Medicine name:  "Augmentin 625 Duo Tablet", "Dolo 650 Tablet SR"
-# ---------------------------------------------------------------------------
 def extract_dosage_form(name: str) -> str:
     low = name.lower()
-    for form in DOSAGE_FORMS:  # multi-word forms are listed first
+    for form in DOSAGE_FORMS:  
         if re.search(rf"\b{re.escape(form)}s?\b", low):
             return form
     return "other"
@@ -170,9 +146,6 @@ def is_modified_release(name: str) -> int:
     return int(any(t in RELEASE_FLAGS for t in tokens))
 
 
-# ---------------------------------------------------------------------------
-# Main pipeline
-# ---------------------------------------------------------------------------
 def build_parsed_df(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 

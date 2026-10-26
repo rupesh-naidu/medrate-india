@@ -1,24 +1,6 @@
-"""
-app.py
-------
-Streamlit app for the medicine satisfaction project.
-
-Run from the project root:
-    python -m pip install streamlit shap
-    streamlit run app.py
-
-Needs these files (created by the earlier steps):
-    data/processed/medicines_parsed.pkl         (src/parse.py)
-    data/processed/features.pkl                 (src/features.py)
-    models/gbm_composition_net_score_noextremes.pkl
-    reports/oof_composition_net_score_noextremes.csv
-        (python src/train.py --level composition --drop-extremes)
-"""
-
 import sys
 import warnings
 from pathlib import Path
-
 import joblib
 import numpy as np
 import pandas as pd
@@ -28,21 +10,17 @@ warnings.filterwarnings("ignore")
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from parse import build_parsed_df                                # noqa: E402
-from features import (clean_name, combined_text, numeric_features,  # noqa: E402
+from parse import build_parsed_df                              
+from features import (clean_name, combined_text, numeric_features,  
                       severity_features, therapeutic_features)
-from train import aggregate_compositions                         # noqa: E402
+from train import aggregate_compositions                         
 
 TARGET = "net_score"
 REVIEW_COLS = ["excellent_review", "average_review", "poor_review"]
-VARIANT = "composition_net_score_noextremes"   # best model: trained without likely low-review rows
+VARIANT = "composition_net_score_noextremes"   
 
 st.set_page_config(page_title="Medicine Satisfaction", page_icon="💊", layout="wide")
 
-
-# ---------------------------------------------------------------------------
-# Loading (cached)
-# ---------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Loading model...")
 def load_model(variant):
     return joblib.load(ROOT / "models" / f"gbm_{variant}.pkl")
@@ -75,10 +53,6 @@ def load_explainer(variant):
     except Exception:  # shap missing or model type unsupported
         return None
 
-
-# ---------------------------------------------------------------------------
-# Features for a new, user-described medicine (same logic as src/features.py)
-# ---------------------------------------------------------------------------
 def features_for_new_medicine(name, composition, uses, side_effects, feats, median_log_strength):
     raw = pd.DataFrame([{
         "medicine_name": name, "composition": composition, "uses": uses,
@@ -93,7 +67,6 @@ def features_for_new_medicine(name, composition, uses, side_effects, feats, medi
             if c in X.columns:
                 X.loc[0, c] = float(block[c].iloc[0])
 
-    # Strength: use the dataset median if the user gave none (as in training)
     if p["main_strength_mg"].isna().iloc[0] or pd.isna(p["main_strength_mg"].iloc[0]):
         X.loc[0, "strength_missing"] = 1.0
         X.loc[0, "log_main_strength_mg"] = median_log_strength
@@ -145,10 +118,6 @@ def shap_chart(explainer, X, feats, max_display=10):
     fig.subplots_adjust(left=0.38, right=0.95, top=0.95, bottom=0.12)
     return fig
 
-
-# ---------------------------------------------------------------------------
-# Sidebar
-# ---------------------------------------------------------------------------
 if not (ROOT / "models" / f"gbm_{VARIANT}.pkl").exists():
     st.error("Model not found. Run first:\n\n"
              "`python src/train.py --level composition --drop-extremes`")
@@ -171,10 +140,6 @@ st.caption(f"{len(brands):,} medicines · {len(comp):,} compositions · data scr
 
 tab_explore, tab_predict = st.tabs(["🔎 Explore a composition", "🧪 Predict a new medicine"])
 
-
-# ---------------------------------------------------------------------------
-# Tab 1: explore an existing composition
-# ---------------------------------------------------------------------------
 with tab_explore:
     st.subheader("Same composition, different brands")
     query = st.text_input("Search a salt (e.g. telmisartan, paracetamol, luliconazole)", "telmisartan")
@@ -211,10 +176,6 @@ with tab_explore:
         st.dataframe(sub[["medicine_name", "manufacturer", "dosage_form"] + REVIEW_COLS + ["net_score"]],
                      hide_index=True, width="stretch")
 
-
-# ---------------------------------------------------------------------------
-# Tab 2: predict a new medicine
-# ---------------------------------------------------------------------------
 with tab_predict:
     st.subheader("Describe a medicine and get a predicted satisfaction score")
     st.caption("Use the same style as 1mg listings. Side effects: separate each one with a "

@@ -6,11 +6,9 @@ import time
 import warnings
 from pathlib import Path
 
-# Silence a harmless Windows warning from joblib about counting physical CPU cores
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(os.cpu_count() or 1))
 warnings.filterwarnings("ignore", message="Could not find the number of physical cores")
 
-# Make "from features import ..." work however this file is run
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import joblib
@@ -39,7 +37,7 @@ MODEL_DIR = ROOT / "models"
 
 N_SPLITS = 5
 SEED = 42
-MAX_WEIGHT = 20                       # cap so a few huge compositions don't dominate
+MAX_WEIGHT = 20                     
 RIDGE_ALPHAS = [1, 3, 10, 30, 100, 300]
 
 LGBM_PARAMS = dict(n_estimators=600, learning_rate=0.03, num_leaves=31,
@@ -47,9 +45,6 @@ LGBM_PARAMS = dict(n_estimators=600, learning_rate=0.03, num_leaves=31,
                    colsample_bytree=0.7, reg_lambda=1.0, random_state=SEED, verbose=-1)
 
 
-# ---------------------------------------------------------------------------
-# Metrics
-# ---------------------------------------------------------------------------
 def metrics(y_true, y_pred, weight=None) -> dict:
     y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
     return {
@@ -60,9 +55,6 @@ def metrics(y_true, y_pred, weight=None) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Gradient boosting (safe on Windows)
-# ---------------------------------------------------------------------------
 _LGBM_OK = HAS_LGBM
 
 
@@ -96,9 +88,6 @@ def fit_gbm(X: pd.DataFrame, y, sample_weight=None, min_leaf: int = 30):
     return make_gbm(False, min_leaf).fit(X, y, sample_weight=w)
 
 
-# ---------------------------------------------------------------------------
-# Ridge on TF-IDF text + scaled features
-# ---------------------------------------------------------------------------
 def fit_ridge(tr_df, y_tr, feature_cols, sample_weight=None, tune=False):
     tfidf = TfidfVectorizer(ngram_range=(1, 2), min_df=3, max_features=20000,
                             sublinear_tf=True)
@@ -116,9 +105,6 @@ def predict_ridge(bundle, df):
     return bundle["model"].predict(X)
 
 
-# ---------------------------------------------------------------------------
-# Manufacturer target encoding (brand level only)
-# ---------------------------------------------------------------------------
 def add_manufacturer_te(train_df, val_df, y_train, inner_splits=5):
     val_te = target_encode(train_df["manufacturer"], y_train, val_df["manufacturer"])
     train_te = pd.Series(np.nan, index=train_df.index)
@@ -129,17 +115,12 @@ def add_manufacturer_te(train_df, val_df, y_train, inner_splits=5):
                                              train_df.loc[va_idx, "manufacturer"])
     return train_te.values, val_te.values
 
-
-# ---------------------------------------------------------------------------
-# Composition-level aggregation
-# ---------------------------------------------------------------------------
 def salt_key(composition: str) -> str:
     """'amoxycillin (500mg) + clavulanic acid (125mg)' -> 'amoxycillin + clavulanic acid'"""
     return re.sub(r"\s*\([^)]*\)", "", composition).strip()
 
 
 def aggregate_compositions(df, feature_cols, target):
-    # Manufacturer-specific columns make no sense once brands are averaged
     keep_feats = [c for c in feature_cols if c != "log_manufacturer_n_products"]
 
     agg = {c: "mean" for c in keep_feats}
@@ -152,10 +133,6 @@ def aggregate_compositions(df, feature_cols, target):
     comp["weight"] = np.minimum(comp["n_brands"], MAX_WEIGHT)
     return comp, keep_feats
 
-
-# ---------------------------------------------------------------------------
-# Cross-validation runners
-# ---------------------------------------------------------------------------
 def cv_brand(df, y, feature_cols, splits, name):
     oof = np.zeros(len(df))
     for tr, va in splits:
@@ -194,9 +171,6 @@ def print_row(name, split, m):
           f"R2={m['R2']:6.3f}  Spearman={m['Spearman']:6.3f}")
 
 
-# ---------------------------------------------------------------------------
-# Brand level
-# ---------------------------------------------------------------------------
 def run_brand(df, feature_cols, target, suffix):
     y = df[target].astype(float)
     groups = df["composition_clean"]
@@ -221,7 +195,6 @@ def run_brand(df, feature_cols, target, suffix):
     oof_df = df[["medicine_name", "manufacturer", "composition_clean",
                  "primary_category", target]].assign(**oofs)
 
-    # Final tree model with manufacturer encoding
     X = df[feature_cols].copy()
     te = pd.Series(np.nan, index=df.index)
     for tr, va in KFold(N_SPLITS, shuffle=True, random_state=SEED).split(df):
@@ -236,10 +209,6 @@ def run_brand(df, feature_cols, target, suffix):
                   "manufacturer_te_map": te_map, "global_mean": gm}
     return results, oof_df, gbm_bundle, None
 
-
-# ---------------------------------------------------------------------------
-# Composition level
-# ---------------------------------------------------------------------------
 def run_composition(df, feature_cols, target, suffix):
     comp, feats = aggregate_compositions(df, feature_cols, target)
     y = comp[target].astype(float)
@@ -263,7 +232,6 @@ def run_composition(df, feature_cols, target, suffix):
         oof = cv_composition(comp, y, feats, grouped if split == "grouped" else random_, name)
         oofs[f"pred_{name}_{split}"] = oof
 
-        # Scored on all compositions, weighted, and on the more reliable subsets
         for subset, mask in [("all", np.ones(len(comp), bool)),
                              ("3+ brands", comp["n_brands"].values >= 3),
                              ("5+ brands", comp["n_brands"].values >= 5)]:
@@ -284,10 +252,6 @@ def run_composition(df, feature_cols, target, suffix):
     print(f"Ridge alpha chosen on full data: {ridge_bundle['model'].alpha_}")
     return results, oof_df, gbm_bundle, ridge_bundle
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--level", default="brand", choices=["brand", "composition"])
