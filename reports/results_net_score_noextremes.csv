@@ -1,0 +1,6 @@
+model,split,MAE,RMSE,R2,Spearman,seconds
+baseline_mean,grouped,29.5433,37.3167,-0.0002,-0.0201,0.0762
+ridge_tfidf,grouped,28.1718,36.395,0.0486,0.259,6.9142
+lgbm_no_manufacturer,grouped,28.5903,36.9158,0.0212,0.2274,158.4479
+lgbm,grouped,28.5894,36.8538,0.0245,0.2283,151.4209
+lgbm,random,28.3393,36.5903,0.0384,0.2543,146.3504

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Notebooks / editors
+.ipynb_checkpoints/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Raw Kaggle download (the app only needs data/processed/)
+data/Medicine_Details.csv
